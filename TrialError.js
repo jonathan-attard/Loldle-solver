@@ -6,10 +6,51 @@ const colors = require('ansi-colors');
 const baseUrl   = "https://loldle.net/"
 const gameNames = ["classic", "quote", "ability", "splash"];
 
-async function GetChampions() {
+async function GetLatestVersion() {
   const options = {
     host: "ddragon.leagueoflegends.com",
-    path: "/cdn/6.24.1/data/en_US/champion.json",
+    path: "/api/versions.json",
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  }
+
+  return new Promise(function (resolve, reject) {
+    const req = http.request(options, res => {
+
+      var dstr = "";
+      res.on('data', d => {
+        dstr += d;
+      });
+
+      res.on("end", () => {
+        var versions = JSON.parse (dstr);
+        // data = jdval["data"];
+        // versions = [];
+        // for (var key in data) {
+        //   versions.push(data[key]);
+        // }
+        resolve(versions[0]);
+      });
+    });
+
+    req.on('error', error => {
+      // console.log ("Error occurred");
+      // console.error(error);
+      reject(error);
+    })
+
+    req.end();
+  });
+}
+
+async function GetChampions() {
+  const version = await GetLatestVersion();
+
+  const options = {
+    host: "ddragon.leagueoflegends.com",
+    path: `/cdn/${version}/data/en_US/champion.json`,
     method: 'GET',
     headers: {
       'Content-Type': 'application/json'
@@ -101,8 +142,6 @@ async function BruteForceSolution(page, championNames, gameName, multibar) {
 
 async function GetSolutions() {
   const championNames = await GetChampions();
-  // console.log(championNames);
-  // shuffle(championNames);
 
   const browser = await puppeteer.launch({
     headless: true,
