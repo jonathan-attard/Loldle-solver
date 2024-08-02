@@ -1,1 +1,8 @@
+nexe .\TrialError.exe --build
+
+
+npm install nexe
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 nexe -i "TrialError.js" -r "public/**/*.html" -o "dist/Loldle-pro.exe" -t x64-14.15.3
+
+pkg TrialError.js --targets node18-win-x64

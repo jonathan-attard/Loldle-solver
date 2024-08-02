@@ -1,10 +1,10 @@
 const puppeteer = require('puppeteer');
-var http = require ("http");
+var http = require("http");
 const cliProgress = require('cli-progress');
 const colors = require('ansi-colors');
 
-const baseUrl   = "https://loldle.net/"
-const gameNames = ["classic", "quote", "ability", "splash"];
+const baseUrl = "https://loldle.net/"
+const gameNames = ["classic", "quote", "ability", "splash", "emoji"];
 
 async function GetLatestVersion() {
   const options = {
@@ -25,7 +25,7 @@ async function GetLatestVersion() {
       });
 
       res.on("end", () => {
-        var versions = JSON.parse (dstr);
+        var versions = JSON.parse(dstr);
         // data = jdval["data"];
         // versions = [];
         // for (var key in data) {
@@ -66,7 +66,7 @@ async function GetChampions() {
       });
 
       res.on("end", () => {
-        var jdval = JSON.parse (dstr);
+        var jdval = JSON.parse(dstr);
         data = jdval["data"];
         names = [];
         for (var key in data) {
@@ -88,7 +88,7 @@ async function GetChampions() {
 
 function shuffle(array) {
   // https://stackoverflow.com/questions/2450954/how-to-randomize-shuffle-a-javascript-array
-  let currentIndex = array.length,  randomIndex;
+  let currentIndex = array.length, randomIndex;
 
   // While there remain elements to shuffle.
   while (currentIndex != 0) {
@@ -105,10 +105,30 @@ function shuffle(array) {
   return array;
 }
 
+async function clickElement(page, text) {
+  // Get over the close thing
+  // const closeText = 'X'
+  const xpath = `//*[text()='${text}']`;
+  try {
+    const element = await page.waitForSelector('xpath/' + xpath, { visible: true, timeout: 3000 })
+    await element.click();
+  }
+  catch {
+
+  }
+
+}
+
 async function BruteForceSolution(page, championNames, gameName, multibar) {
   url = baseUrl + gameName;
 
-  await page.goto(url);
+  await page.goto(url, { waitUntil: ['domcontentloaded', 'networkidle2'] });
+
+  // await new Promise(resolve => setTimeout(resolve, 10000));
+
+  // Get over the close thing
+  await clickElement(page, 'Consent')
+  await clickElement(page, 'X')
 
   // Looping through champions - Brute force
   const selector = "input";  // Input selector
@@ -118,12 +138,16 @@ async function BruteForceSolution(page, championNames, gameName, multibar) {
   // create new progress bar
   const b1 = multibar.create(championNames.length, 0)
 
-  await page.waitForSelector (selector);  // Waiting for input
+  await page.waitForSelector(selector);  // Waiting for input
   await page.$eval(selector, input => input.value = '');  // Clear input just in case
   for (const name of championNames) {
     b1.increment();
     try {
-      await page.type(selector, name + String.fromCharCode(13), {delay: 0})
+      await page.$eval(selector, input => {
+        input.focus();
+        document.execCommand('selectAll');
+      });
+      await page.type(selector, name + String.fromCharCode(13), { delay: 10 });
     } catch (error) {
       break;
     }
@@ -132,7 +156,7 @@ async function BruteForceSolution(page, championNames, gameName, multibar) {
   b1.stop();
   b1.updateETA();
 
-  await page.waitForSelector (winSelector);  // Waiting for solution
+  await page.waitForSelector(winSelector);  // Waiting for solution
   winningName = await page.$eval(winSelector, (el) => {
     return el.innerText;
   });
@@ -144,7 +168,7 @@ async function GetSolutions() {
   const championNames = await GetChampions();
 
   const browser = await puppeteer.launch({
-    headless: true,
+    headless: false, // true,
     defaultViewport: null,
     args: [
       '--incognito',
@@ -154,12 +178,14 @@ async function GetSolutions() {
 
   const [page] = await browser.pages();
   page.close();
-  const context = await browser.createIncognitoBrowserContext();
+
+  // const context = await browser.createIncognitoBrowserContext();
+  const context = browser;
 
   // Progress bar
-    const multibar = new cliProgress.MultiBar({
-      // clearOnComplete: false,
-      // hideCursor: true
+  const multibar = new cliProgress.MultiBar({
+    // clearOnComplete: false,
+    // hideCursor: true
   }, cliProgress.Presets.shades_grey);
 
   solutions = {};
@@ -169,9 +195,14 @@ async function GetSolutions() {
     const staticChampionNamesClone = [...championNames];
     shuffle(staticChampionNamesClone);
 
-    // Creating new page for each
+    // Create a new page for each game
     const newPage = await context.newPage();
-    solutions[gameName] = await BruteForceSolution(newPage, staticChampionNamesClone, gameName, multibar);
+    try {
+      solutions[gameName] = await BruteForceSolution(newPage, staticChampionNamesClone, gameName, multibar);
+    } finally {
+      // Ensure the page is closed after processing
+      await newPage.close();
+    }
   })
 
   await Promise.all(promises);
@@ -202,9 +233,19 @@ async function LaunchSolutions(solutions) {
 
     // Getting solutions
     url = baseUrl + gameName;
-    await page.goto(url);
+    // await page.goto(url);
 
-    await page.type(selector, solutions[gameName] + String.fromCharCode(13), {delay: 0});
+    await page.goto(url, { waitUntil: ['domcontentloaded', 'networkidle2'] });
+
+    // Get over the close thing
+    await clickElement(page, 'Consent')
+    await clickElement(page, 'X')
+
+    setTimeout(() => {
+      browser.close();
+    }, 100);
+
+    await page.type(selector, solutions[gameName] + String.fromCharCode(13), { delay: 0 });
   })
 
   await Promise.all(promises);

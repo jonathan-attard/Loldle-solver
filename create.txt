@@ -1,0 +1,6 @@
+npm init -y
+npm install puppeteer
+npm install http
+npm install cli-progress
+npm install ansi-colors
+npm update
